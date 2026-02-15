@@ -1,10 +1,9 @@
 package com.mekheainteractive.Transaction_Microservice.Service;
 
-import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.Map;
 
@@ -17,54 +16,83 @@ public class PlayFabService {
     @Value("${playfab.secret-key}")
     private String secretKey;
 
-    @PostConstruct
-    public void init() {
-        this.webClient = WebClient.builder()
+    private RestClient getClient() {
+        return RestClient.builder()
                 .baseUrl("https://" + titleId + ".playfabapi.com/Server")
+                .defaultHeader("X-SecretKey", secretKey)
                 .build();
     }
 
-    private WebClient webClient;
+    // ✅ Get Currency Balance
+    public int getSenderCurrency(String playfabId) {
+        try {
+            Map response = getClient()
+                    .post()
+                    .uri("/GetUserInventory")
+                    .body(Map.of("PlayFabId", playfabId))
+                    .retrieve()
+                    .body(Map.class);
 
-    public Mono<Integer> getCurrencyBalance(String playfabId, String currencyCode) {
-        return webClient.post()
-                .uri("/GetUserInventoryRequest")
-                .header("X-SecretKey", secretKey)
-                .bodyValue(Map.of("PlayFabId", playfabId))
-                .retrieve()
-                .bodyToMono(Map.class)
-                .map(response -> {
-                    Map<String, Object> data = (Map<String, Object>) response.get("data");
-                    Map<String, Integer> vc = (Map<String, Integer>) data.get("VirtualCurrency");
-                    return vc.getOrDefault(currencyCode, 0);
-                });
+            Map<String, Object> data =
+                    (Map<String, Object>) response.get("data");
+
+            Map<String, Integer> currency =
+                    (Map<String, Integer>) data.get("VirtualCurrency");
+
+            return currency.getOrDefault("RP", 0);
+
+        } catch (RestClientResponseException ex) {
+            System.err.println("Get inventory error: " + ex.getResponseBodyAsString());
+            return 0;
+        }
     }
 
-    public Mono<Integer> subtractCurrency(String playfabId, String currencyCode, int amount) {
-        return webClient.post()
-                .uri("/SubtractUserVirtualCurrency")
-                .header("X-SecretKey", secretKey)
-                .bodyValue(Map.of(
-                        "PlayFabId", playfabId,
-                        "VirtualCurrency", currencyCode,
-                        "Amount", amount
-                ))
-                .retrieve()
-                .bodyToMono(Map.class)
-                .map(resp -> (Integer)((Map<String, Object>)resp.get("data")).get("Balance"));
+    // Subtract Currency
+    public int subtractCurrency(String playfabId, String currencyCode, int amount) {
+        try {
+            Map response = getClient()
+                    .post()
+                    .uri("/SubtractUserVirtualCurrency")
+                    .body(Map.of(
+                            "PlayFabId", playfabId,
+                            "VirtualCurrency", currencyCode,
+                            "Amount", amount
+                    ))
+                    .retrieve()
+                    .body(Map.class);
+
+            Map<String, Object> data = (Map<String, Object>) response.get("data");
+
+            return (Integer) data.get("Balance");
+
+        } catch (RestClientResponseException ex) {
+            System.err.println("Subtract error: " + ex.getResponseBodyAsString());
+            return -1;
+        }
     }
 
-    public Mono<Integer> addCurrency(String playfabId, String currencyCode, int amount) {
-        return webClient.post()
-                .uri("/AddUserVirtualCurrency")
-                .header("X-SecretKey", secretKey)
-                .bodyValue(Map.of(
-                        "PlayFabId", playfabId,
-                        "VirtualCurrency", currencyCode,
-                        "Amount", amount
-                ))
-                .retrieve()
-                .bodyToMono(Map.class)
-                .map(resp -> (Integer)((Map<String, Object>)resp.get("data")).get("Balance"));
+    // Add Currency
+    public int addCurrency(String playfabId, String currencyCode, int amount)
+    {
+        try {
+            Map response = getClient()
+                    .post()
+                    .uri("/AddUserVirtualCurrency")
+                    .body(Map.of(
+                            "PlayFabId", playfabId,
+                            "VirtualCurrency", currencyCode,
+                            "Amount", amount
+                    ))
+                    .retrieve()
+                    .body(Map.class);
+
+            Map<String, Object> data = (Map<String, Object>) response.get("data");
+
+            return (Integer) data.get("Balance");
+
+        } catch (RestClientResponseException ex) {
+            System.err.println("Add error: " + ex.getResponseBodyAsString());
+            return -1;
+        }
     }
 }
