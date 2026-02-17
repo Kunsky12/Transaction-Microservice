@@ -1,41 +1,89 @@
 package com.mekheainteractive.Transaction_Microservice.Controller;
 
-import com.mekheainteractive.Transaction_Microservice.Entity.TransactionEntity;
-import com.mekheainteractive.Transaction_Microservice.Service.TransactionService;
+import com.mekheainteractive.Transaction_Microservice.Entity.LedgerEntity;
+import com.mekheainteractive.Transaction_Microservice.Service.JwtService;
+import com.mekheainteractive.Transaction_Microservice.Service.LedgerService;
+import com.mekheainteractive.Transaction_Microservice.Service.PlayFabService;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/")
+@RequestMapping("/api")
 public class TransactionController {
 
-    private final TransactionService transactionService;
+    private final LedgerService ledgerService;
+    private final PlayFabService playFabService;
+    private final JwtService jwtService;
 
-    public TransactionController(TransactionService transactionService) {
-        this.transactionService = transactionService;
+    public TransactionController(
+            LedgerService ledgerService,
+            PlayFabService playFabService,
+            JwtService jwtService
+    ) {
+        this.ledgerService = ledgerService;
+        this.playFabService = playFabService;
+        this.jwtService = jwtService;
+    }
+
+    // 🔐 LOGIN
+    @PostMapping("/auth/login")
+    public String login(@RequestBody LoginRequest request) {
+        String sessionTicket = playFabService.verifySessionTicket(request.getSessionTicket());
+        return jwtService.generateToken(sessionTicket);
     }
 
     @PostMapping("/transfer")
-    public TransactionEntity transfer(@RequestBody TransferRequest request) {
-        if (request.getSenderId() == null || request.getReceiverId() == null) {
-            throw new RuntimeException("SenderId or ReceiverId cannot be null");
+    public List<LedgerEntity> transfer(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody TransferRequest request
+    ) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new RuntimeException("Missing or invalid Authorization header");
         }
-        return transactionService.transfer(
-                request.getSenderId(),
+
+        String token = authHeader.substring(7);
+
+        if (!jwtService.validateToken(token)) {
+            throw new RuntimeException("Invalid JWT token");
+        }
+
+        String senderId = jwtService.extractPlayfabId(token);
+
+        if (senderId == null || request.getReceiverId() == null || request.currency == null) {
+            throw new IllegalArgumentException("Sender, receiver, and currency must be non-null");
+        }
+
+        if (request.amount <= 0) {
+            throw new IllegalArgumentException("Amount must be positive");
+        }
+
+        return ledgerService.transfer(
+                request.getIdempotencyKey(),
+                senderId,
                 request.getReceiverId(),
                 request.getAmount(),
-                request.getCurrencyCode()
+                request.getCurrency()
         );
     }
 
     @Data
     @NoArgsConstructor
-    public static class TransferRequest {
-        private String senderId;
+    public static class LoginRequest {
+        private String sessionTicket;
+    }
+
+    // DTO
+    @Data
+    @NoArgsConstructor
+    public static class TransferRequest
+    {
+        private String idempotencyKey;
         private String receiverId;
         private int amount;
-        private String currencyCode;
+        private String currency;
     }
 }
 
