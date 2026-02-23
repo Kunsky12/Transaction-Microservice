@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: kunkhmermobile-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: KunKhmerMobile_DB
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    volumes:
+      - kafka_data:/apache/kafka
+
+  transaction-service:
+    build: /home/ubuntu/Transaction-Microservice
+    container_name: transaction-service
+    ports:
+      - "6000:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://43.156.3.86:5432/KunKhmerMobile_DB
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PLAYFAB_TITLE_ID: ${PLAYFAB_TITLE_ID}
+      PLAYFAB_SECRET_KEY: ${PLAYFAB_SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      WEBSOCKET_URL: ${WEBSOCKET_URL}
+    depends_on:
+      - database
+      - redis
+      - kafka
+
+  match-record-service:
+    image: match-record-service:latest
+    container_name: match-record-service
+    ports:
+      - "7000:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://43.156.3.86:5432/KunKhmerMobile_DB
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      PLAYFAB_TITLE_ID: ${PLAYFAB_TITLE_ID}
+      PLAYFAB_SECRET_KEY: ${PLAYFAB_SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    depends_on:
+      - database
+      - transaction-service
+
+volumes:
+  db_data:
+  kafka_data:

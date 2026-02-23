@@ -1,5 +1,6 @@
 package com.mekheainteractive.Transaction_Microservice.Service;
 
+import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -8,7 +9,7 @@ import org.springframework.web.client.RestClientResponseException;
 import java.util.Map;
 
 @Service
-public class PlayFabService {
+public class PlayFabWalletService {
 
     @Value("${playfab.title-id}")
     private String titleId;
@@ -22,7 +23,23 @@ public class PlayFabService {
                 .defaultHeader("X-SecretKey", secretKey)
                 .build();
     }
+    // -----------------------------
+    // Currency Result wrapper
+    // -----------------------------
+    public static class CurrencyResult {
+        private final boolean success;
+        @Getter
+        private final int balance;
 
+        public CurrencyResult(boolean success, int balance) {
+            this.success = success;
+            this.balance = balance;
+        }
+
+        public boolean success() {
+            return success;
+        }
+    }
 
     // Get User Balance
     public int getSenderCurrency(String playfabId) {
@@ -34,11 +51,8 @@ public class PlayFabService {
                     .retrieve()
                     .body(Map.class);
 
-            Map<String, Object> data =
-                    (Map<String, Object>) response.get("data");
-
-            Map<String, Integer> currency =
-                    (Map<String, Integer>) data.get("VirtualCurrency");
+            Map<String, Object> data = (Map<String, Object>) response.get("data");
+            Map<String, Integer> currency = (Map<String, Integer>) data.get("VirtualCurrency");
 
             return currency.getOrDefault("RP", 0);
 
@@ -48,8 +62,8 @@ public class PlayFabService {
         }
     }
 
-    // Subtract Sender Balance
-    public int subtractCurrency(String playfabId, String currency, int amount) {
+    // Subtract Currency
+    public CurrencyResult subtractCurrency(String playfabId, String currency, int amount) {
         try {
             Map response = restClient()
                     .post()
@@ -63,18 +77,18 @@ public class PlayFabService {
                     .body(Map.class);
 
             Map<String, Object> data = (Map<String, Object>) response.get("data");
+            int balance = (Integer) data.get("Balance");
 
-            return (Integer) data.get("Balance");
+            return new CurrencyResult(true, balance);
 
         } catch (RestClientResponseException ex) {
             System.err.println("Subtract error: " + ex.getResponseBodyAsString());
-            return -1;
+            return new CurrencyResult(false, -1);
         }
     }
 
-    // Add Balance to Receiver
-    public int addCurrency(String playfabId, String currency, int amount)
-    {
+    // Add Currency
+    public CurrencyResult addCurrency(String playfabId, String currency, int amount) {
         try {
             Map response = restClient()
                     .post()
@@ -88,23 +102,20 @@ public class PlayFabService {
                     .body(Map.class);
 
             Map<String, Object> data = (Map<String, Object>) response.get("data");
+            int balance = (Integer) data.get("Balance");
 
-            return (Integer) data.get("Balance");
+            return new CurrencyResult(true, balance);
 
         } catch (RestClientResponseException ex) {
             System.err.println("Add error: " + ex.getResponseBodyAsString());
-            return -1;
+            return new CurrencyResult(false, -1);
         }
     }
 
-    // -----------------------------
     // Verify PlayFab session ticket
-    // -----------------------------
     public String verifySessionTicket(String sessionTicket) {
         try {
-            Map<String, Object> body = Map.of(
-                    "SessionTicket", sessionTicket
-            );
+            Map<String, Object> body = Map.of("SessionTicket", sessionTicket);
 
             Map response = restClient()
                     .post()
@@ -114,28 +125,24 @@ public class PlayFabService {
                     .body(Map.class);
 
             if (response == null) {
-                System.err.println("❌ PlayFab response is null");
+                System.err.println("PlayFab response is null");
                 return null;
             }
 
             Map<String, Object> data = (Map<String, Object>) response.get("data");
-            if (data == null) {
-                System.err.println("❌ PlayFab data is null");
-                return null;
-            }
-
             Map<String, Object> userInfo = (Map<String, Object>) data.get("UserInfo");
+
             if (userInfo == null) {
-                System.err.println("❌ PlayFab UserInfo is null");
+                System.err.println("PlayFab UserInfo is null");
                 return null;
             }
 
-            String playFabId = (String) userInfo.get("PlayFabId"); // ✅ Extract PlayFabId
-            System.out.println("✅ Extracted PlayFabId " + playFabId);
+            String playFabId = (String) userInfo.get("PlayFabId");
+            System.out.println("Extracted PlayFabId " + playFabId);
             return playFabId;
 
         } catch (RestClientResponseException ex) {
-            System.err.println("❌ PlayFab verify session error: " + ex.getResponseBodyAsString());
+            System.err.println("PlayFab verify session error: " + ex.getResponseBodyAsString());
             return null;
         } catch (Exception e) {
             e.printStackTrace();
@@ -143,4 +150,3 @@ public class PlayFabService {
         }
     }
 }
-

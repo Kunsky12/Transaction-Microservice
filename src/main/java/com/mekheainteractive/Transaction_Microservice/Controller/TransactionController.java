@@ -1,42 +1,29 @@
 package com.mekheainteractive.Transaction_Microservice.Controller;
 
-import com.mekheainteractive.Transaction_Microservice.Entity.LedgerEntity;
-import com.mekheainteractive.Transaction_Microservice.Service.JwtService;
+import com.mekheainteractive.Transaction_Microservice.DTO.TransactionDTO;
+import com.mekheainteractive.Transaction_Microservice.Auth.JwtAuth;
 import com.mekheainteractive.Transaction_Microservice.Service.LedgerService;
-import com.mekheainteractive.Transaction_Microservice.Service.PlayFabService;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api")
 public class TransactionController {
 
     private final LedgerService ledgerService;
-    private final PlayFabService playFabService;
-    private final JwtService jwtService;
+    private final JwtAuth jwtService;
 
     public TransactionController(
             LedgerService ledgerService,
-            PlayFabService playFabService,
-            JwtService jwtService
+            JwtAuth jwtService
     ) {
         this.ledgerService = ledgerService;
-        this.playFabService = playFabService;
         this.jwtService = jwtService;
     }
 
-    // 🔐 LOGIN
-    @PostMapping("/auth/login")
-    public String login(@RequestBody LoginRequest request) {
-        String sessionTicket = playFabService.verifySessionTicket(request.getSessionTicket());
-        return jwtService.generateToken(sessionTicket);
-    }
-
     @PostMapping("/transfer")
-    public List<LedgerEntity> transfer(
+    public TransactionDTO transfer(
             @RequestHeader("Authorization") String authHeader,
             @RequestBody TransferRequest request
     ) {
@@ -50,7 +37,7 @@ public class TransactionController {
             throw new RuntimeException("Invalid JWT token");
         }
 
-        String senderId = jwtService.extractPlayfabId(token);
+        String senderId = jwtService.extractPlayFabId(token);
 
         if (senderId == null || request.getReceiverId() == null || request.currency == null) {
             throw new IllegalArgumentException("Sender, receiver, and currency must be non-null");
@@ -63,18 +50,13 @@ public class TransactionController {
         return ledgerService.transfer(
                 request.getIdempotencyKey(),
                 senderId,
+                request.getSenderName(),
+                request.getFacebookId(),
                 request.getReceiverId(),
                 request.getAmount(),
                 request.getCurrency()
         );
     }
-
-    @Data
-    @NoArgsConstructor
-    public static class LoginRequest {
-        private String sessionTicket;
-    }
-
     // DTO
     @Data
     @NoArgsConstructor
@@ -84,6 +66,8 @@ public class TransactionController {
         private String receiverId;
         private int amount;
         private String currency;
+        private String facebookId;
+        private String senderName;
     }
 }
 

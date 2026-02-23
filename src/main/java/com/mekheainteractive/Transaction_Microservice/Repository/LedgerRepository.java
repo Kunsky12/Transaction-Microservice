@@ -1,14 +1,16 @@
 package com.mekheainteractive.Transaction_Microservice.Repository;
 
-import com.mekheainteractive.Transaction_Microservice.Entity.LedgerEntity;
+import com.mekheainteractive.Transaction_Microservice.Entity.TransactionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface LedgerRepository extends JpaRepository<LedgerEntity, String> {
+public interface LedgerRepository extends JpaRepository<TransactionEntity, String> {
 
-    List<LedgerEntity> findByIdempotencyKey(String idempotencyKey); // ✅ unique or 0/1
+    List<TransactionEntity> findBySenderIdAndIdempotencyKey(String senderId, String idempotencyKey);
 }
+
