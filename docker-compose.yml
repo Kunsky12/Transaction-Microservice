@@ -25,19 +25,31 @@ services:
     container_name: kafka
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_CFG_PROCESS_ROLES: broker,controller
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: PLAINTEXT
+      KAFKA_LOG_DIRS: /kafka/kraft-logs
+      KAFKA_CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+    volumes:
+      - ./kafka-data:/kafka/kraft-logs
     ports:
       - "9092:9092"
-      - "9093:9093"
-    volumes:
-      - kafka_data:/apache/kafka
+
+  authenticator-service:
+    image: ghcr.io/kunsky12/authenticator-service:latest
+    container_name: authenticator-service
+    restart: always
+    ports:
+      - "5000:8080"   # host:container port
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      PLAYFAB_TITLE_ID: ${PLAYFAB_TITLE_ID}
+      PLAYFAB_SECRET_KEY: ${PLAYFAB_SECRET_KEY}   
 
   transaction-service:
+    image: ghcr.io/kunsky12/transaction-service:latest
+    restart: always
     build: /home/ubuntu/Transaction-Microservice
     container_name: transaction-service
     ports:
@@ -59,6 +71,7 @@ services:
 
   match-record-service:
     image: match-record-service:latest
+    restart: always
     container_name: match-record-service
     ports:
       - "7000:8080"
